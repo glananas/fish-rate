@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Где Клюёт? PRO</title>
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Leaflet Карта (Стили и Скрипт) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --success: #10b981;
+      --danger: #f43f5e;
+      --warning: #f59e0b;
+      --gold: #fbbf24;
+      --nav-h: 64px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Верхняя панель */
+    .top-bar {
+      padding: 12px 16px;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+    .top-title { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .stars-badge {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Основная рабочая область */
+    .content-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .view {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+      padding-bottom: 20px;
+    }
+    .view.active { display: flex; }
+
+    /* --- КАРТА --- */
+    #map-view { padding: 0; }
+    #map { width: 100%; height: 100%; }
+    
+    .map-floating-box {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      background: rgba(30, 41, 59, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 12px;
+      z-index: 1000;
+      font-size: 13px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    .btn-calc-floating {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      z-index: 1000;
+      box-shadow: 0 4px 25px rgba(2, 132, 199, 0.5);
+      display: none;
+    }
+    .btn-calc-floating:active { transform: scale(0.98); }
+
+    /* --- ПРОГНОЗ КЛЁВА --- */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin: 12px 16px;
+      padding: 16px;
+    }
+    .card-title { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+
+    .weather-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .weather-item {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .weather-val { font-size: 16px; font-weight: 800; color: #fff; margin-top: 2px; }
+
+    /* Полосы активности рыбы */
+    .fish-metric { margin-top: 14px; }
+    .fish-header { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 6px;
+      transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tip-box {
+      margin-top: 14px;
+      padding: 12px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #bae6fd;
+    }
+
+    /* --- ЛЕНТА УЛОВОВ (СОЦСЕТЬ) --- */
+    .post-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin: 12px 16px;
+      overflow: hidden;
+    }
+    .post-author {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .post-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #0284c7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: white;
+    }
+    .post-img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+      background: #0f172a;
+    }
+    .post-footer {
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn-star-gift {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-star-gift:active { transform: scale(0.96); }
+
+    /* --- ПРОФИЛЬ И РЕКЛАМА --- */
+    .profile-box { text-align: center; padding: 24px 16px; }
+    .ad-banner {
+      margin: 16px;
+      padding: 24px 16px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.8) 100%);
+      border: 2px dashed rgba(56, 189, 248, 0.3);
+      border-radius: 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* --- НИЖНЯЯ НАВИГАЦИЯ --- */
+    .nav-bar {
+      height: var(--nav-h);
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+      border: none;
+      background: none;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-icon { font-size: 20px; }
+  </style>
+</head>
+<body>
+
+  <!-- Верхняя строка -->
+  <div class="top-bar">
+    <div class="top-title">🎣 Где Клюёт? <span style="color:var(--primary); font-size:11px; border:1px solid var(--primary); padding:2px 6px; border-radius:6px;">PRO</span></div>
+    <div class="stars-badge" onclick="showDonateModal()">⭐ <span id="user-stars">150</span> Stars</div>
+  </div>
+
+  <div class="content-area">
+
+    <!-- ТАБ 1: КАРТА -->
+    <div id="view-map" class="view active">
+      <div class="map-floating-box">
+        📍 <b>Тапните по водоему на карте</b>, чтобы выбрать точку рыбалки
+      </div>
+      <div id="map"></div>
+      <button id="calc-btn" class="btn-calc-floating" onclick="calculateForecast()">
+        📊 Рассчитать клёв на этой точке
+      </button>
+    </div>
+
+    <!-- ТАБ 2: ПРОГНОЗ -->
+    <div id="view-forecast" class="view">
+      <div class="card">
+        <div class="card-title">Метеосводка в точке</div>
+        <div style="font-size:13px; color:var(--primary); font-weight:700;" id="forecast-coords">Координаты: 55.75, 37.61</div>
+        
+        <div class="weather-grid">
+          <div class="weather-item">
+            <div style="font-size:11px; color:var(--text-muted);">Давление</div>
+            <div class="weather-val" id="w-press">741 мм рт.ст.</div>
+            <div style="font-size:10px; color:var(--danger);">📉 Падает (жор щуки)</div>
+          </div>
+          <div class="weather-item">
+            <div style="font-size:11px; color:var(--text-muted);">Температура</div>
+            <div class="weather-val" id="w-temp">+17°C ⛅</div>
+            <div style="font-size:10px; color:var(--success);">Вода: +15°C</div>
+          </div>
+          <div class="weather-item">
+            <div style="font-size:11px; color:var(--text-muted);">Ветер</div>
+            <div class="weather-val" id="w-wind">3.5 м/с (Ю-З)</div>
+            <div style="font-size:10px; color:var(--success);">Благоприятный</div>
+          </div>
+          <div class="weather-item">
+            <div style="font-size:11px; color:var(--text-muted);">Фаза луны</div>
+            <div class="weather-val" id="w-moon">Растущая 🌔</div>
+            <div style="font-size:10px; color:var(--primary);">72% освещенность</div>
+          </div>
+        </div>
+
+        <div class="tip-box" id="forecast-tip">
+          💡 <b>Совет дня:</b> Из-за падения барометрического давления белая рыба уходит на глубину. Рекомендуется ловить хищника на глубинные воблеры и джиг.
+        </div>
+      </div>
+
+      <!-- Расчет по видам рыб -->
+      <div class="card">
+        <div class="card-title">Индекс клёва по видам рыб</div>
+
+        <!-- Щука / Судак -->
+        <div class="fish-metric">
+          <div class="fish-header">
+            <span>🐊 Щука / Судак (Хищник)</span>
+            <span id="val-pike" style="color:var(--success);">88%</span>
+          </div>
+          <div class="progress-track">
+            <div id="bar-pike" class="progress-fill" style="width: 88%; background: var(--success);"></div>
+          </div>
+        </div>
+
+        <!-- Карп / Карась -->
+        <div class="fish-metric">
+          <div class="fish-header">
+            <span>🐟 Карп / Карась (Мирная)</span>
+            <span id="val-carp" style="color:var(--danger);">25%</span>
+          </div>
+          <div class="progress-track">
+            <div id="bar-carp" class="progress-fill" style="width: 25%; background: var(--danger);"></div>
+          </div>
+        </div>
+
+        <!-- Окунь -->
+        <div class="fish-metric">
+          <div class="fish-header">
+            <span>🐡 Окунь / Голавль</span>
+            <span id="val-perch" style="color:var(--warning);">65%</span>
+          </div>
+          <div class="progress-track">
+            <div id="bar-perch" class="progress-fill" style="width: 65%; background: var(--warning);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ТАБ 3: ЛЕНТА УЛОВОВ -->
+    <div id="view-feed" class="view">
+      
+      <!-- Пост 1 -->
+      <div class="post-card">
+        <div class="post-author">
+          <div class="post-avatar">Д</div>
+          <div>
+            <div style="font-weight:700; font-size:14px;">Дмитрий Волков</div>
+            <div style="font-size:11px; color:var(--text-muted);">Иваньковское водохранилище • 3 часа назад</div>
+          </div>
+        </div>
+        <img class="post-img" src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=700&q=80" alt="Улов">
+        <div style="padding:12px 14px 4px; font-size:13px; line-height:1.5;">
+          Взял трофейного судака на 4.8 кг! Работал виброхвост 4 дюйма цвета ультрафиолет. Клёв начался ровно в 6 утра, как и обещал прогноз давления! 🔥
+        </div>
+        <div class="post-footer">
+          <div style="font-size:12px; color:var(--primary); font-weight:700;">🎯 Щука / Судак</div>
+          <button class="btn-star-gift" onclick="tipStars('Дмитрий', 15)">
+            ⭐ Наградить (15 Stars)
+          </button>
+        </div>
+      </div>
+
+      <!-- Пост 2 -->
+      <div class="post-card">
+        <div class="post-author">
+          <div class="post-avatar" style="background:#10b981;">А</div>
+          <div>
+            <div style="font-weight:700; font-size:14px;">Алексей (Карпятник)</div>
+            <div style="font-size:11px; color:var(--text-muted);">Озеро Сенеж • Вчера</div>
+          </div>
+        </div>
+        <img class="post-img" src="https://images.unsplash.com/photo-1535083783855-76ae62b2914e?auto=format&fit=crop&w=700&q=80" alt="Улов">
+        <div style="padding:12px 14px 4px; font-size:13px; line-height:1.5;">
+          Карп сегодня капризный, но двух красавцев на 2.5 и 3.1 кг уговорить удалось на клубничный бойл.
+        </div>
+        <div class="post-footer">
+          <div style="font-size:12px; color:var(--success); font-weight:700;">🌽 Мирная рыба</div>
+          <button class="btn-star-gift" onclick="tipStars('Алексей', 15)">
+            ⭐ Наградить (15 Stars)
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ТАБ 4: ПРОФИЛЬ -->
+    <div id="view-profile" class="view">
+      <div class="profile-box">
+        <div style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg, #0284c7, #38bdf8); margin:0 auto 12px; display:flex; align-items:center; justify-content:center; font-size:32px;">
+          🎣
+        </div>
+        <h2 id="prof-name" style="font-size:18px; font-weight:800; margin-bottom:4px;">Рыбак</h2>
+        <div style="font-size:12px; color:var(--success); font-weight:600;">PRO-аккаунт активен</div>
+      </div>
+
+      <div class="card" style="margin-top:0;">
+        <div class="card-title">Статистика аккаунта</div>
+        <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0;">
+          <div>
+            <div style="font-size:18px; font-weight:800; color:var(--primary);">14</div>
+            <div style="font-size:11px; color:var(--text-muted);">Точек сохранено</div>
+          </div>
+          <div>
+            <div style="font-size:18px; font-weight:800; color:var(--gold);">3</div>
+            <div style="font-size:11px; color:var(--text-muted);">Отчета с фото</div>
+          </div>
+          <div>
+            <div style="font-size:18px; font-weight:800; color:var(--success);">150</div>
+            <div style="font-size:11px; color:var(--text-muted);">Stars на счету</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Рекламный плейсхолдер -->
+      <div class="ad-banner">
+        📢 <b>Рекламное место</b><br>
+        Баннер рыболовного магазина или платного водоема<br>
+        <span style="font-size:11px; color:var(--primary); margin-top:6px; display:inline-block;">Купить размещение (Stars / ₽)</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Нижняя панель навигации -->
+  <div class="nav-bar">
+    <button class="nav-item active" onclick="switchNav('map')">
+      <div class="nav-icon">🗺️</div>
+      <span>Карта</span>
+    </button>
+    <button class="nav-item" id="nav-forecast" onclick="switchNav('forecast')">
+      <div class="nav-icon">📊</div>
+      <span>Прогноз</span>
+    </button>
+    <button class="nav-item" onclick="switchNav('feed')">
+      <div class="nav-icon">📸</div>
+      <span>Уловы</span>
+    </button>
+    <button class="nav-item" onclick="switchNav('profile')">
+      <div class="nav-icon">👤</div>
+      <span>Профиль</span>
+    </button>
+  </div>
+
+  <script>
+    // Инициализация Telegram SDK
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+      if (tg.initDataUnsafe?.user) {
+        document.getElementById('prof-name').innerText = tg.initDataUnsafe.user.first_name || 'Рыбак';
+      }
+    }
+
+    // Инициализация Leaflet Карты
+    let map = null;
+    let selectedMarker = null;
+    let currentCoords = { lat: 55.75, lng: 37.61 };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Центр по умолчанию — Московский регион / Волга
+      map = L.map('map', { zoomControl: false }).setView([55.75, 37.61], 7);
+
+      // Слой карты OpenStreetMap
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      // Демо-метка успешного улова на карте
+      const fishIcon = L.divIcon({
+        html: '<div style="background:#0284c7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 2px 10px rgba(0,0,0,0.5);">🐟</div>',
+        className: '',
+        iconSize: [28, 28]
+      });
+      L.marker([56.1, 37.1], { icon: fishIcon }).addTo(map).bindPopup("<b>Дмитрий:</b> Судак 4.8 кг!");
+
+      // Обработка клика по карте
+      map.on('click', (e) => {
+        currentCoords = e.latlng;
+        if (selectedMarker) map.removeLayer(selectedMarker);
+
+        selectedMarker = L.marker([currentCoords.lat, currentCoords.lng]).addTo(map);
+        
+        const calcBtn = document.getElementById('calc-btn');
+        calcBtn.style.display = 'block';
+
+        if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+      });
+    });
+
+    // Переключение табов
+    function switchNav(tabId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+
+      document.getElementById('view-' + tabId).classList.add('active');
+      event.currentTarget.classList.add('active');
+
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+      // Фикс бага «серого экрана» в Leaflet при переключении
+      if (tabId === 'map' && map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+    }
+
+    // Расчет прогноза клева
+    function calculateForecast() {
+      const lat = currentCoords.lat.toFixed(2);
+      const lng = currentCoords.lng.toFixed(2);
+      document.getElementById('forecast-coords').innerText = `Координаты точки: ${lat}, ${lng}`;
+
+      // Симуляция алгоритма в зависимости от давления
+      const mockPressure = 738 + Math.floor(Math.random() * 15);
+      const isDropping = mockPressure < 744;
+
+      document.getElementById('w-press').innerText = `${mockPressure} мм рт.ст.`;
+
+      // Расчет шансов (Щука любит падение, Карп любит стабильное высокое)
+      const pikeChance = isDropping ? Math.floor(75 + Math.random() * 20) : Math.floor(30 + Math.random() * 25);
+      const carpChance = isDropping ? Math.floor(15 + Math.random() * 25) : Math.floor(70 + Math.random() * 25);
+      const perchChance = Math.floor(50 + Math.random() * 30);
+
+      updateMetric('pike', pikeChance);
+      updateMetric('carp', carpChance);
+      updateMetric('perch', perchChance);
+
+      // Переключаем на таб прогноза
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      document.getElementById('view-forecast').classList.add('active');
+      document.getElementById('nav-forecast').classList.add('active');
+
+      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    }
+
+    function updateMetric(fishKey, val) {
+      const fill = document.getElementById(`bar-${fishKey}`);
+      const txt = document.getElementById(`val-${fishKey}`);
+      fill.style.width = `${val}%`;
+      txt.innerText = `${val}%`;
+
+      if (val >= 70) {
+        fill.style.background = 'var(--success)';
+        txt.style.color = 'var(--success)';
+      } else if (val >= 40) {
+        fill.style.background = 'var(--warning)';
+        txt.style.color = 'var(--warning)';
+      } else {
+        fill.style.background = 'var(--danger)';
+        txt.style.color = 'var(--danger)';
+      }
+    }
+
+    // Донаты Telegram Stars
+    function tipStars(author, count) {
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+      if (tg?.showPopup) {
+        tg.showPopup({
+          title: `Наградить ⭐ ${count} Stars?`,
+          message: `Вы хотите перевести ${count} звезд автору ${author} за лучший отчет об улове?`,
+          buttons: [
+            { id: 'ok', type: 'default', text: 'Оплатить Stars' },
+            { type: 'cancel', text: 'Отмена' }
+          ]
+        }, (btnId) => {
+          if (btnId === 'ok') {
+            tg.showAlert(`Успешно! Вы перевели ${count} ⭐ автору ${author}.`);
+          }
+        });
+      } else {
+        alert(`Тестовый перевод ${count} Stars автору ${author}!`);
+      }
+    }
+
+    function showDonateModal() {
+      if (tg?.showAlert) {
+        tg.showAlert("Здесь подключается баланс Telegram Stars для покупки PRO-статуса и продвижения отчетов!");
+      }
+    }
+  </script>
+</body>
+</html>
