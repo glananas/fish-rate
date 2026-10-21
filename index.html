@@ -3,31 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <title>Где Клюёт? PRO</title>
+  <title>Рыбалка — Клев рядом</title>
 
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Leaflet Карта (Стили и Скрипт) -->
+  <!-- Leaflet Map (Dark Tiles) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --border: rgba(255, 255, 255, 0.08);
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #38bdf8;
-      --success: #10b981;
-      --danger: #f43f5e;
-      --warning: #f59e0b;
-      --gold: #fbbf24;
-      --nav-h: 64px;
+      --bg: #0b1118;
+      --card-bg: #131c27;
+      --card-inner: #192535;
+      --border: rgba(255, 255, 255, 0.06);
+      --text: #ffffff;
+      --text-muted: #8493a5;
+      --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.25);
+      --orange: #f59e0b;
+      --nav-h: 68px;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; user-select: none; }
 
     body {
       background: var(--bg);
@@ -38,566 +37,616 @@
       flex-direction: column;
     }
 
-    /* Верхняя панель */
-    .top-bar {
-      padding: 12px 16px;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      z-index: 100;
-    }
-    .top-title { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
-    .stars-badge {
-      background: rgba(251, 191, 36, 0.15);
-      color: var(--gold);
-      border: 1px solid rgba(251, 191, 36, 0.3);
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    /* Основная рабочая область */
-    .content-area {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .view {
-      position: absolute;
+    /* --- 1. ЗАСТАВКА (SPLASH SCREEN) --- */
+    #splash-screen {
+      position: fixed;
       inset: 0;
+      z-index: 9999;
+      background: linear-gradient(180deg, rgba(11,17,24,0.4) 0%, rgba(11,17,24,0.95) 100%),
+                  url('https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80') center/cover no-repeat;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 60px 24px 50px;
+      transition: opacity 0.5s ease;
+    }
+    .splash-logo-wrap { text-align: center; margin-top: 80px; }
+    .splash-icon { font-size: 56px; margin-bottom: 12px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+    .splash-title { font-size: 32px; font-weight: 800; letter-spacing: 0.5px; }
+    .splash-sub { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+    .splash-loader-wrap { width: 100%; max-width: 240px; text-align: center; }
+    .splash-progress {
+      width: 100%; height: 4px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; margin-bottom: 12px;
+    }
+    .splash-bar { width: 0%; height: 100%; background: var(--green); border-radius: 4px; animation: loadProg 1.6s forwards ease-in-out; }
+    @keyframes loadProg { 0% { width: 0%; } 100% { width: 100%; } }
+
+    /* --- ОСНОВНЫЕ ЭКРАНЫ --- */
+    .app-screen {
+      flex: 1;
       display: none;
       flex-direction: column;
       overflow-y: auto;
-      padding-bottom: 20px;
+      overflow-x: hidden;
+      position: relative;
     }
-    .view.active { display: flex; }
+    .app-screen.active { display: flex; }
 
-    /* --- КАРТА --- */
-    #map-view { padding: 0; }
-    #map { width: 100%; height: 100%; }
-    
-    .map-floating-box {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      right: 12px;
-      background: rgba(30, 41, 59, 0.92);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      border-radius: 12px;
-      z-index: 1000;
-      font-size: 13px;
-      text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    }
-
-    .btn-calc-floating {
-      position: absolute;
-      bottom: 16px;
-      left: 16px;
-      right: 16px;
-      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-      color: white;
-      border: none;
-      padding: 14px;
-      border-radius: 14px;
-      font-size: 15px;
-      font-weight: 800;
-      cursor: pointer;
-      z-index: 1000;
-      box-shadow: 0 4px 25px rgba(2, 132, 199, 0.5);
-      display: none;
-    }
-    .btn-calc-floating:active { transform: scale(0.98); }
-
-    /* --- ПРОГНОЗ КЛЁВА --- */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      margin: 12px 16px;
-      padding: 16px;
-    }
-    .card-title { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-
-    .weather-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .weather-item {
-      background: rgba(15, 23, 42, 0.6);
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-    }
-    .weather-val { font-size: 16px; font-weight: 800; color: #fff; margin-top: 2px; }
-
-    /* Полосы активности рыбы */
-    .fish-metric { margin-top: 14px; }
-    .fish-header { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
-    .progress-track {
-      width: 100%;
-      height: 10px;
-      background: rgba(15, 23, 42, 0.8);
-      border-radius: 6px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 6px;
-      transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .tip-box {
-      margin-top: 14px;
-      padding: 12px;
-      background: rgba(56, 189, 248, 0.08);
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      border-radius: 10px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #bae6fd;
-    }
-
-    /* --- ЛЕНТА УЛОВОВ (СОЦСЕТЬ) --- */
-    .post-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      margin: 12px 16px;
-      overflow: hidden;
-    }
-    .post-author {
-      padding: 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .post-avatar {
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: #0284c7;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      color: white;
-    }
-    .post-img {
-      width: 100%;
-      height: 200px;
-      object-fit: cover;
-      display: block;
-      background: #0f172a;
-    }
-    .post-footer {
-      padding: 12px;
+    /* Хедер */
+    .screen-header {
+      padding: 16px 20px 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
     }
-    .btn-star-gift {
-      background: rgba(251, 191, 36, 0.15);
-      color: var(--gold);
-      border: 1px solid rgba(251, 191, 36, 0.3);
-      padding: 8px 14px;
-      border-radius: 10px;
-      font-size: 13px;
+    .brand-block { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 38px; height: 38px; background: var(--card-bg); border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+      border: 1px solid var(--border);
+    }
+    .brand-name { font-size: 17px; font-weight: 800; }
+    .brand-sub { font-size: 11px; color: var(--text-muted); }
+
+    /* Карточки */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      margin: 8px 16px;
+    }
+
+    /* Локация-селектор */
+    .location-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin: 4px 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Виджет погоды */
+    .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .weather-temp { font-size: 38px; font-weight: 800; display: flex; align-items: flex-start; }
+    .weather-desc { font-size: 12px; color: var(--text-muted); max-width: 100px; text-align: right; line-height: 1.3; }
+    .weather-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+      text-align: center;
+    }
+    .w-val { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+    .w-lbl { font-size: 11px; color: var(--text-muted); }
+
+    /* Клев сегодня */
+    .bite-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      margin: 8px 16px;
+      cursor: pointer;
+    }
+    .bite-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .bite-status { display: flex; align-items: center; gap: 10px; }
+    .bite-badge {
+      width: 36px; height: 36px; background: rgba(34, 197, 94, 0.15); border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .progress-track {
+      width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; margin-top: 8px;
+    }
+    .progress-fill { width: 75%; height: 100%; background: var(--green); border-radius: 6px; }
+
+    /* Таймслоты дня */
+    .time-slots { display: flex; justify-content: space-between; margin-top: 16px; }
+    .slot-item { text-align: center; flex: 1; }
+    .slot-bar { width: 32px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 0 auto 6px; }
+    .slot-bar.active { background: var(--green); }
+    .slot-name { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+    .slot-name.active { color: var(--green); font-weight: 700; }
+
+    /* Фильтры таблетки */
+    .pill-tabs { display: flex; gap: 8px; padding: 4px 16px 12px; overflow-x: auto; }
+    .pill-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
+      white-space: nowrap;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .btn-star-gift:active { transform: scale(0.96); }
-
-    /* --- ПРОФИЛЬ И РЕКЛАМА --- */
-    .profile-box { text-align: center; padding: 24px 16px; }
-    .ad-banner {
-      margin: 16px;
-      padding: 24px 16px;
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.8) 100%);
-      border: 2px dashed rgba(56, 189, 248, 0.3);
-      border-radius: 14px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 13px;
+    .pill-btn.active {
+      background: var(--green);
+      color: #0b1118;
+      border-color: var(--green);
     }
 
-    /* --- НИЖНЯЯ НАВИГАЦИЯ --- */
-    .nav-bar {
+    /* --- КАРТА --- */
+    #map-view { padding: 0; }
+    #map { width: 100%; height: 100%; }
+    .map-header {
+      position: absolute; top: 12px; left: 16px; right: 16px; z-index: 1000;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .map-card-drawer {
+      position: absolute; bottom: 16px; left: 16px; right: 16px;
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
+      padding: 14px; z-index: 1000; display: flex; gap: 14px; align-items: center;
+      cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .drawer-img { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
+    .drawer-info { flex: 1; }
+
+    /* --- ДЕТАЛИ ВОДОЕМА (Днестр) --- */
+    .detail-cover {
+      width: 100%; height: 190px; object-fit: cover; border-radius: 0 0 24px 24px;
+    }
+    .forecast-3d { display: flex; gap: 8px; margin-top: 10px; }
+    .day-card {
+      flex: 1; background: var(--card-inner); border-radius: 14px; padding: 12px 8px; text-align: center;
+    }
+    .gear-grid { display: flex; gap: 10px; margin-top: 12px; }
+    .gear-item {
+      flex: 1; background: var(--card-inner); border-radius: 14px; padding: 14px 8px; text-align: center;
+      font-size: 11px; color: var(--text-muted); font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+
+    /* --- ЖУРНАЛ --- */
+    .journal-item {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 18px;
+      padding: 12px 14px; margin: 6px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer;
+    }
+    .journal-img { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; }
+
+    /* --- ПРОФИЛЬ --- */
+    .profile-avatar-row {
+      display: flex; align-items: center; gap: 14px; padding: 20px 20px 10px;
+    }
+    .profile-avatar {
+      width: 58px; height: 58px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 26px;
+    }
+    .menu-row {
+      display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;
+      border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-exit {
+      background: var(--card-bg); border: 1px solid var(--border); color: #ef4444; width: calc(100% - 32px);
+      margin: 24px 16px 0; padding: 14px; border-radius: 14px; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+
+    /* --- НИЖНИЙ НАВБАР --- */
+    .bottom-nav {
       height: var(--nav-h);
-      background: var(--card-bg);
+      background: #090e14;
       border-top: 1px solid var(--border);
       display: flex;
-      z-index: 100;
+      z-index: 1000;
     }
-    .nav-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 700;
-      border: none;
-      background: none;
+    .nav-tab {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; color: #536374; font-size: 10px; font-weight: 700; cursor: pointer; border: none; background: none;
     }
-    .nav-item.active { color: var(--primary); }
-    .nav-icon { font-size: 20px; }
+    .nav-tab.active { color: var(--green); }
+    .nav-tab.active .nav-icon { filter: drop-shadow(0 0 6px var(--green-glow)); }
   </style>
 </head>
 <body>
 
-  <!-- Верхняя строка -->
-  <div class="top-bar">
-    <div class="top-title">🎣 Где Клюёт? <span style="color:var(--primary); font-size:11px; border:1px solid var(--primary); padding:2px 6px; border-radius:6px;">PRO</span></div>
-    <div class="stars-badge" onclick="showDonateModal()">⭐ <span id="user-stars">150</span> Stars</div>
+  <!-- 1. ЗАСТАВКА (SPLASH) -->
+  <div id="splash-screen">
+    <div class="splash-logo-wrap">
+      <div class="splash-icon">🐟</div>
+      <div class="splash-title">Рыбалка</div>
+      <div class="splash-sub">Клев рядом</div>
+    </div>
+    <div class="splash-loader-wrap">
+      <div class="splash-progress"><div class="splash-bar"></div></div>
+      <div style="font-size: 11px; color: var(--text-muted);">Загружаем данные...</div>
+    </div>
   </div>
 
-  <div class="content-area">
-
-    <!-- ТАБ 1: КАРТА -->
-    <div id="view-map" class="view active">
-      <div class="map-floating-box">
-        📍 <b>Тапните по водоему на карте</b>, чтобы выбрать точку рыбалки
+  <!-- 2. ЭКРАН: ГЛАВНАЯ -->
+  <div id="screen-home" class="app-screen active">
+    <div class="screen-header">
+      <div class="brand-block">
+        <div class="brand-icon">🐟</div>
+        <div>
+          <div class="brand-name">Рыбалка</div>
+          <div class="brand-sub">Клев рядом</div>
+        </div>
       </div>
-      <div id="map"></div>
-      <button id="calc-btn" class="btn-calc-floating" onclick="calculateForecast()">
-        📊 Рассчитать клёв на этой точке
-      </button>
+      <div style="font-size: 18px; color: var(--text-muted); cursor: pointer;">⋮</div>
     </div>
 
-    <!-- ТАБ 2: ПРОГНОЗ -->
-    <div id="view-forecast" class="view">
-      <div class="card">
-        <div class="card-title">Метеосводка в точке</div>
-        <div style="font-size:13px; color:var(--primary); font-weight:700;" id="forecast-coords">Координаты: 55.75, 37.61</div>
-        
-        <div class="weather-grid">
-          <div class="weather-item">
-            <div style="font-size:11px; color:var(--text-muted);">Давление</div>
-            <div class="weather-val" id="w-press">741 мм рт.ст.</div>
-            <div style="font-size:10px; color:var(--danger);">📉 Падает (жор щуки)</div>
-          </div>
-          <div class="weather-item">
-            <div style="font-size:11px; color:var(--text-muted);">Температура</div>
-            <div class="weather-val" id="w-temp">+17°C ⛅</div>
-            <div style="font-size:10px; color:var(--success);">Вода: +15°C</div>
-          </div>
-          <div class="weather-item">
-            <div style="font-size:11px; color:var(--text-muted);">Ветер</div>
-            <div class="weather-val" id="w-wind">3.5 м/с (Ю-З)</div>
-            <div style="font-size:10px; color:var(--success);">Благоприятный</div>
-          </div>
-          <div class="weather-item">
-            <div style="font-size:11px; color:var(--text-muted);">Фаза луны</div>
-            <div class="weather-val" id="w-moon">Растущая 🌔</div>
-            <div style="font-size:10px; color:var(--primary);">72% освещенность</div>
-          </div>
-        </div>
-
-        <div class="tip-box" id="forecast-tip">
-          💡 <b>Совет дня:</b> Из-за падения барометрического давления белая рыба уходит на глубину. Рекомендуется ловить хищника на глубинные воблеры и джиг.
-        </div>
+    <!-- Выбор локации -->
+    <div class="location-pill" onclick="openScreen('map')">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span>📍</span>
+        <span>Молдова, Днестр</span>
       </div>
+      <span style="font-size: 11px; color: var(--text-muted);">▼</span>
+    </div>
 
-      <!-- Расчет по видам рыб -->
-      <div class="card">
-        <div class="card-title">Индекс клёва по видам рыб</div>
-
-        <!-- Щука / Судак -->
-        <div class="fish-metric">
-          <div class="fish-header">
-            <span>🐊 Щука / Судак (Хищник)</span>
-            <span id="val-pike" style="color:var(--success);">88%</span>
-          </div>
-          <div class="progress-track">
-            <div id="bar-pike" class="progress-fill" style="width: 88%; background: var(--success);"></div>
-          </div>
+    <!-- Погода -->
+    <div class="card">
+      <div class="weather-main">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="font-size: 34px;">⛅</div>
+          <div class="weather-temp">18°</div>
         </div>
-
-        <!-- Карп / Карась -->
-        <div class="fish-metric">
-          <div class="fish-header">
-            <span>🐟 Карп / Карась (Мирная)</span>
-            <span id="val-carp" style="color:var(--danger);">25%</span>
-          </div>
-          <div class="progress-track">
-            <div id="bar-carp" class="progress-fill" style="width: 25%; background: var(--danger);"></div>
-          </div>
+        <div class="weather-desc">Переменная облачность</div>
+      </div>
+      <div class="weather-stats">
+        <div>
+          <div class="w-val">2 м/с</div>
+          <div class="w-lbl">СВ</div>
         </div>
-
-        <!-- Окунь -->
-        <div class="fish-metric">
-          <div class="fish-header">
-            <span>🐡 Окунь / Голавль</span>
-            <span id="val-perch" style="color:var(--warning);">65%</span>
-          </div>
-          <div class="progress-track">
-            <div id="bar-perch" class="progress-fill" style="width: 65%; background: var(--warning);"></div>
-          </div>
+        <div>
+          <div class="w-val">752 мм</div>
+          <div class="w-lbl">рт. ст.</div>
+        </div>
+        <div>
+          <div class="w-val">12.4°C</div>
+          <div class="w-lbl">вода</div>
         </div>
       </div>
     </div>
 
-    <!-- ТАБ 3: ЛЕНТА УЛОВОВ -->
-    <div id="view-feed" class="view">
-      
-      <!-- Пост 1 -->
-      <div class="post-card">
-        <div class="post-author">
-          <div class="post-avatar">Д</div>
+    <!-- Клев сегодня -->
+    <div class="bite-card" onclick="openDetailView()">
+      <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; margin-bottom: 8px;">Клев сегодня</div>
+      <div class="bite-header">
+        <div class="bite-status">
+          <div class="bite-badge">🐟</div>
           <div>
-            <div style="font-weight:700; font-size:14px;">Дмитрий Волков</div>
-            <div style="font-size:11px; color:var(--text-muted);">Иваньковское водохранилище • 3 часа назад</div>
+            <div style="font-size: 16px; font-weight: 800;">Хороший</div>
+            <div class="progress-track" style="width: 140px;"><div class="progress-fill"></div></div>
           </div>
         </div>
-        <img class="post-img" src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=700&q=80" alt="Улов">
-        <div style="padding:12px 14px 4px; font-size:13px; line-height:1.5;">
-          Взял трофейного судака на 4.8 кг! Работал виброхвост 4 дюйма цвета ультрафиолет. Клёв начался ровно в 6 утра, как и обещал прогноз давления! 🔥
-        </div>
-        <div class="post-footer">
-          <div style="font-size:12px; color:var(--primary); font-weight:700;">🎯 Щука / Судак</div>
-          <button class="btn-star-gift" onclick="tipStars('Дмитрий', 15)">
-            ⭐ Наградить (15 Stars)
-          </button>
-        </div>
+        <div style="color: var(--text-muted); font-size: 16px;">›</div>
       </div>
 
-      <!-- Пост 2 -->
-      <div class="post-card">
-        <div class="post-author">
-          <div class="post-avatar" style="background:#10b981;">А</div>
-          <div>
-            <div style="font-weight:700; font-size:14px;">Алексей (Карпятник)</div>
-            <div style="font-size:11px; color:var(--text-muted);">Озеро Сенеж • Вчера</div>
-          </div>
+      <!-- Временные слоты -->
+      <div class="time-slots">
+        <div class="slot-item">
+          <div class="slot-bar active"></div>
+          <div class="slot-name active">Сейчас</div>
         </div>
-        <img class="post-img" src="https://images.unsplash.com/photo-1535083783855-76ae62b2914e?auto=format&fit=crop&w=700&q=80" alt="Улов">
-        <div style="padding:12px 14px 4px; font-size:13px; line-height:1.5;">
-          Карп сегодня капризный, но двух красавцев на 2.5 и 3.1 кг уговорить удалось на клубничный бойл.
+        <div class="slot-item">
+          <div class="slot-bar"></div>
+          <div class="slot-name">Утро</div>
         </div>
-        <div class="post-footer">
-          <div style="font-size:12px; color:var(--success); font-weight:700;">🌽 Мирная рыба</div>
-          <button class="btn-star-gift" onclick="tipStars('Алексей', 15)">
-            ⭐ Наградить (15 Stars)
-          </button>
+        <div class="slot-item">
+          <div class="slot-bar"></div>
+          <div class="slot-name">День</div>
         </div>
-      </div>
-
-    </div>
-
-    <!-- ТАБ 4: ПРОФИЛЬ -->
-    <div id="view-profile" class="view">
-      <div class="profile-box">
-        <div style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg, #0284c7, #38bdf8); margin:0 auto 12px; display:flex; align-items:center; justify-content:center; font-size:32px;">
-          🎣
+        <div class="slot-item">
+          <div class="slot-bar"></div>
+          <div class="slot-name">Вечер</div>
         </div>
-        <h2 id="prof-name" style="font-size:18px; font-weight:800; margin-bottom:4px;">Рыбак</h2>
-        <div style="font-size:12px; color:var(--success); font-weight:600;">PRO-аккаунт активен</div>
-      </div>
-
-      <div class="card" style="margin-top:0;">
-        <div class="card-title">Статистика аккаунта</div>
-        <div style="display:flex; justify-content:space-around; text-align:center; padding:8px 0;">
-          <div>
-            <div style="font-size:18px; font-weight:800; color:var(--primary);">14</div>
-            <div style="font-size:11px; color:var(--text-muted);">Точек сохранено</div>
-          </div>
-          <div>
-            <div style="font-size:18px; font-weight:800; color:var(--gold);">3</div>
-            <div style="font-size:11px; color:var(--text-muted);">Отчета с фото</div>
-          </div>
-          <div>
-            <div style="font-size:18px; font-weight:800; color:var(--success);">150</div>
-            <div style="font-size:11px; color:var(--text-muted);">Stars на счету</div>
-          </div>
+        <div class="slot-item">
+          <div class="slot-bar"></div>
+          <div class="slot-name">Ночь</div>
         </div>
-      </div>
-
-      <!-- Рекламный плейсхолдер -->
-      <div class="ad-banner">
-        📢 <b>Рекламное место</b><br>
-        Баннер рыболовного магазина или платного водоема<br>
-        <span style="font-size:11px; color:var(--primary); margin-top:6px; display:inline-block;">Купить размещение (Stars / ₽)</span>
       </div>
     </div>
 
+    <!-- Лучшие виды сегодня -->
+    <div style="padding: 12px 20px 4px; font-size: 13px; font-weight: 700;">Лучшие виды сегодня</div>
+    <div class="pill-tabs">
+      <div class="pill-btn active"><span>🎣</span> Щука</div>
+      <div class="pill-btn"><span>🐟</span> Окунь</div>
+      <div class="pill-btn"><span>🐡</span> Сазан</div>
+    </div>
   </div>
 
-  <!-- Нижняя панель навигации -->
-  <div class="nav-bar">
-    <button class="nav-item active" onclick="switchNav('map')">
-      <div class="nav-icon">🗺️</div>
-      <span>Карта</span>
+  <!-- 3. ЭКРАН: КАРТА ВОДОЕМОВ -->
+  <div id="screen-map" class="app-screen">
+    <div class="map-header">
+      <div class="pill-btn" style="background:rgba(19,28,39,0.9); backdrop-filter:blur(10px); padding:8px 12px;" onclick="openScreen('home')">
+        ← Карта водоемов
+      </div>
+      <div class="pill-btn" style="background:rgba(19,28,39,0.9); backdrop-filter:blur(10px); width:36px; height:36px; padding:0; justify-content:center;">
+        🔍
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Нижняя карточка водоема Днестр -->
+    <div class="map-card-drawer" onclick="openDetailView()">
+      <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=150&q=80" class="drawer-img" alt="Днестр">
+      <div class="drawer-info">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size: 15px; font-weight: 800;">Днестр</div>
+          <div style="font-size: 12px; color: var(--text-muted);">≈ 12 км ›</div>
+        </div>
+        <div style="font-size: 12px; color: var(--green); font-weight: 700; margin-top: 4px;">Клев: хороший</div>
+        <div class="progress-track" style="margin-top: 6px;"><div class="progress-fill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. ЭКРАН: ДЕТАЛИ ВОДОЕМА (Днестр) -->
+  <div id="screen-detail" class="app-screen">
+    <div style="position: absolute; top: 16px; left: 16px; right: 16px; display:flex; justify-content:space-between; z-index:10;">
+      <div class="brand-icon" style="background:rgba(19,28,39,0.8); cursor:pointer;" onclick="openScreen('home')">←</div>
+      <div class="brand-icon" style="background:rgba(19,28,39,0.8); cursor:pointer;">★</div>
+    </div>
+    
+    <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=700&q=80" class="detail-cover" alt="Днестр">
+    
+    <div style="padding: 16px 20px 6px;">
+      <div style="font-size: 22px; font-weight: 800; margin-bottom: 4px;">Днестр</div>
+      <div style="font-size: 12px; color: var(--text-muted);">📍 12 км • Молдова</div>
+    </div>
+
+    <!-- Клев -->
+    <div class="card" style="margin-top: 6px;">
+      <div class="bite-header" style="margin-bottom:0;">
+        <div class="bite-status">
+          <div class="bite-badge">🐟</div>
+          <div>
+            <div style="font-size: 12px; color:var(--text-muted);">Клев</div>
+            <div style="font-size: 16px; font-weight: 800;">Хороший</div>
+          </div>
+        </div>
+        <div class="progress-track" style="width: 100px;"><div class="progress-fill"></div></div>
+      </div>
+    </div>
+
+    <!-- Прогноз на 3 дня -->
+    <div style="padding: 10px 20px 2px; font-size: 13px; font-weight: 700;">Прогноз на 3 дня</div>
+    <div class="forecast-3d" style="padding: 0 16px;">
+      <div class="day-card">
+        <div style="font-size: 11px; font-weight:700;">Сегодня</div>
+        <div style="font-size: 10px; color:var(--text-muted); margin-bottom:6px;">15.05</div>
+        <div class="progress-track"><div class="progress-fill" style="width:85%;"></div></div>
+        <div style="font-size: 11px; color:var(--green); font-weight:700; margin-top:6px;">Хороший</div>
+      </div>
+      <div class="day-card">
+        <div style="font-size: 11px; font-weight:700;">Завтра</div>
+        <div style="font-size: 10px; color:var(--text-muted); margin-bottom:6px;">16.05</div>
+        <div class="progress-track"><div class="progress-fill" style="width:50%; background:var(--orange);"></div></div>
+        <div style="font-size: 11px; color:var(--orange); font-weight:700; margin-top:6px;">Средний</div>
+      </div>
+      <div class="day-card">
+        <div style="font-size: 11px; font-weight:700;">Послезавтра</div>
+        <div style="font-size: 10px; color:var(--text-muted); margin-bottom:6px;">17.05</div>
+        <div class="progress-track"><div class="progress-fill" style="width:25%; background:#64748b;"></div></div>
+        <div style="font-size: 11px; color:var(--text-muted); font-weight:700; margin-top:6px;">Слабый</div>
+      </div>
+    </div>
+
+    <!-- Рекомендуемые снасти -->
+    <div style="padding: 16px 20px 2px; font-size: 13px; font-weight: 700;">Рекомендуемые снасти</div>
+    <div class="gear-grid" style="padding: 0 16px 20px;">
+      <div class="gear-item"><span>🪝</span>Поплавочная удочка</div>
+      <div class="gear-item"><span>🎣</span>Спиннинг</div>
+      <div class="gear-item"><span>🪱</span>Наживка (червь, мотыль)</div>
+    </div>
+  </div>
+
+  <!-- 5. ЭКРАН: ЖУРНАЛ -->
+  <div id="screen-journal" class="app-screen">
+    <div class="screen-header">
+      <div style="font-size: 18px; font-weight: 800;">Журнал</div>
+      <div class="brand-icon" style="cursor:pointer;" onclick="addCatchAlert()">+</div>
+    </div>
+
+    <div class="pill-tabs">
+      <div class="pill-btn active">Все</div>
+      <div class="pill-btn">Уловы</div>
+      <div class="pill-btn">Заметки</div>
+    </div>
+
+    <!-- Улов 1 -->
+    <div class="journal-item">
+      <img src="https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=150&q=80" class="journal-img" alt="Щука">
+      <div style="flex:1;">
+        <div style="font-size: 14px; font-weight: 800;">Щука</div>
+        <div style="font-size: 11px; color: var(--text-muted);">14 мая 2025 • Днестр</div>
+        <div style="font-size: 12px; font-weight: 700; color: var(--green); margin-top: 2px;">2.8 кг</div>
+      </div>
+      <div style="color:var(--text-muted);">›</div>
+    </div>
+
+    <!-- Улов 2 -->
+    <div class="journal-item">
+      <img src="https://images.unsplash.com/photo-1535083783855-76ae62b2914e?auto=format&fit=crop&w=150&q=80" class="journal-img" alt="Окунь">
+      <div style="flex:1;">
+        <div style="font-size: 14px; font-weight: 800;">Окунь</div>
+        <div style="font-size: 11px; color: var(--text-muted);">11 мая 2025 • Пруд у с. Хаджимус</div>
+        <div style="font-size: 12px; font-weight: 700; color: var(--green); margin-top: 2px;">0.6 кг</div>
+      </div>
+      <div style="color:var(--text-muted);">›</div>
+    </div>
+
+    <!-- Улов 3 -->
+    <div class="journal-item">
+      <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=150&q=80" class="journal-img" alt="Сазан">
+      <div style="flex:1;">
+        <div style="font-size: 14px; font-weight: 800;">Сазан</div>
+        <div style="font-size: 11px; color: var(--text-muted);">8 мая 2025 • Днестр</div>
+        <div style="font-size: 12px; font-weight: 700; color: var(--green); margin-top: 2px;">4.2 кг</div>
+      </div>
+      <div style="color:var(--text-muted);">›</div>
+    </div>
+
+    <!-- Заметка -->
+    <div class="journal-item">
+      <div class="journal-img" style="background:var(--card-inner); display:flex; align-items:center; justify-content:center; font-size:22px;">📝</div>
+      <div style="flex:1;">
+        <div style="font-size: 14px; font-weight: 800;">Заметка</div>
+        <div style="font-size: 11px; color: var(--text-muted);">5 мая 2025</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height:1.3;">Клевал на кукурузу в 6:30. Вода 14°C.</div>
+      </div>
+      <div style="color:var(--text-muted);">›</div>
+    </div>
+  </div>
+
+  <!-- 6. ЭКРАН: ПРОФИЛЬ -->
+  <div id="screen-profile" class="app-screen">
+    <div class="profile-avatar-row">
+      <div class="profile-avatar">🐟</div>
+      <div>
+        <div style="font-size: 17px; font-weight: 800;" id="user-display-name">Рыбак</div>
+        <div style="font-size: 12px; color: var(--text-muted);">Любитель рыбалки</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 14px;">
+      <div class="menu-row" onclick="openScreen('journal')">
+        <div style="display:flex; align-items:center; gap:10px;"><span>🐟</span><span>Мои уловы</span></div>
+        <span style="color:var(--text-muted);">›</span>
+      </div>
+      <div class="menu-row" onclick="tgAlert('Уведомления о лучшем клеве включены!')">
+        <div style="display:flex; align-items:center; gap:10px;"><span>🔔</span><span>Настройки уведомлений</span></div>
+        <span style="color:var(--text-muted);">›</span>
+      </div>
+      <div class="menu-row">
+        <div style="display:flex; align-items:center; gap:10px;"><span>🌡️</span><span>Единицы измерения</span></div>
+        <span style="color:var(--text-muted); font-size:12px;">°C ›</span>
+      </div>
+      <div class="menu-row" onclick="tgAlert('Рыбалка PRO v1.0\nРазработано специально для Telegram Mini Apps.')">
+        <div style="display:flex; align-items:center; gap:10px;"><span>ℹ️</span><span>О приложении</span></div>
+        <span style="color:var(--text-muted);">›</span>
+      </div>
+    </div>
+
+    <button class="btn-exit" onclick="tgAlert('Сессия сохранена в Telegram.')">Выйти</button>
+  </div>
+
+  <!-- НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ -->
+  <div class="bottom-nav">
+    <button class="nav-tab active" id="tab-btn-home" onclick="openScreen('home')">
+      <div class="nav-icon" style="font-size:18px;">🏠</div>
+      <div>Главная</div>
     </button>
-    <button class="nav-item" id="nav-forecast" onclick="switchNav('forecast')">
-      <div class="nav-icon">📊</div>
-      <span>Прогноз</span>
+    <button class="nav-tab" id="tab-btn-map" onclick="openScreen('map')">
+      <div class="nav-icon" style="font-size:18px;">📍</div>
+      <div>Карта</div>
     </button>
-    <button class="nav-item" onclick="switchNav('feed')">
-      <div class="nav-icon">📸</div>
-      <span>Уловы</span>
+    <button class="nav-tab" id="tab-btn-journal" onclick="openScreen('journal')">
+      <div class="nav-icon" style="font-size:18px;">📋</div>
+      <div>Журнал</div>
     </button>
-    <button class="nav-item" onclick="switchNav('profile')">
-      <div class="nav-icon">👤</div>
-      <span>Профиль</span>
+    <button class="nav-tab" id="tab-btn-profile" onclick="openScreen('profile')">
+      <div class="nav-icon" style="font-size:18px;">👤</div>
+      <div>Профиль</div>
     </button>
   </div>
 
   <script>
-    // Инициализация Telegram SDK
+    // 1. Инициализация Telegram WebApp
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.expand();
       tg.ready();
       if (tg.initDataUnsafe?.user) {
-        document.getElementById('prof-name').innerText = tg.initDataUnsafe.user.first_name || 'Рыбак';
+        document.getElementById('user-display-name').innerText = tg.initDataUnsafe.user.first_name || 'Рыбак';
       }
     }
 
-    // Инициализация Leaflet Карты
+    // 2. Скрытие Splash-экрана через 1.6 секунды
+    setTimeout(() => {
+      const splash = document.getElementById('splash-screen');
+      splash.style.opacity = '0';
+      setTimeout(() => splash.style.display = 'none', 500);
+    }, 1600);
+
+    // 3. Инициализация темной карты CartoDB Dark Matter
     let map = null;
-    let selectedMarker = null;
-    let currentCoords = { lat: 55.75, lng: 37.61 };
+    function initMap() {
+      if (map) return;
+      // Центр — река Днестр (Молдова)
+      map = L.map('map', { zoomControl: false }).setView([47.01, 28.86], 9);
 
-    window.addEventListener('DOMContentLoaded', () => {
-      // Центр по умолчанию — Московский регион / Волга
-      map = L.map('map', { zoomControl: false }).setView([55.75, 37.61], 7);
-
-      // Слой карты OpenStreetMap
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Красивые темные тайлы в стиле макета
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 18,
-        attribution: '© OpenStreetMap'
+        attribution: '© CARTO'
       }).addTo(map);
 
-      // Демо-метка успешного улова на карте
-      const fishIcon = L.divIcon({
-        html: '<div style="background:#0284c7; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 2px 10px rgba(0,0,0,0.5);">🐟</div>',
+      // Зеленые светящиеся метки как на макете
+      const greenPin = L.divIcon({
+        html: '<div style="background:#22c55e; width:14px; height:14px; border-radius:50%; box-shadow:0 0 12px #22c55e; border:2px solid #fff;"></div>',
         className: '',
-        iconSize: [28, 28]
+        iconSize: [14, 14]
       });
-      L.marker([56.1, 37.1], { icon: fishIcon }).addTo(map).bindPopup("<b>Дмитрий:</b> Судак 4.8 кг!");
 
-      // Обработка клика по карте
-      map.on('click', (e) => {
-        currentCoords = e.latlng;
-        if (selectedMarker) map.removeLayer(selectedMarker);
+      L.marker([47.05, 28.89], { icon: greenPin }).addTo(map).bindPopup("Днестр: Клев отличный!");
+      L.marker([47.15, 28.95], { icon: greenPin }).addTo(map);
+      L.marker([46.90, 28.70], { icon: greenPin }).addTo(map);
+    }
 
-        selectedMarker = L.marker([currentCoords.lat, currentCoords.lng]).addTo(map);
-        
-        const calcBtn = document.getElementById('calc-btn');
-        calcBtn.style.display = 'block';
+    // 4. Логика переключения экранов
+    function openScreen(name) {
+      document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
 
-        if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
-      });
-    });
+      const target = document.getElementById('screen-' + name);
+      if (target) target.classList.add('active');
 
-    // Переключение табов
-    function switchNav(tabId) {
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-
-      document.getElementById('view-' + tabId).classList.add('active');
-      event.currentTarget.classList.add('active');
+      const activeBtn = document.getElementById('tab-btn-' + name);
+      if (activeBtn) activeBtn.classList.add('active');
 
       if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 
-      // Фикс бага «серого экрана» в Leaflet при переключении
-      if (tabId === 'map' && map) {
-        setTimeout(() => map.invalidateSize(), 100);
+      // Инициализируем карту при первом переходе на вкладку
+      if (name === 'map') {
+        setTimeout(() => {
+          initMap();
+          if (map) map.invalidateSize();
+        }, 50);
       }
     }
 
-    // Расчет прогноза клева
-    function calculateForecast() {
-      const lat = currentCoords.lat.toFixed(2);
-      const lng = currentCoords.lng.toFixed(2);
-      document.getElementById('forecast-coords').innerText = `Координаты точки: ${lat}, ${lng}`;
-
-      // Симуляция алгоритма в зависимости от давления
-      const mockPressure = 738 + Math.floor(Math.random() * 15);
-      const isDropping = mockPressure < 744;
-
-      document.getElementById('w-press').innerText = `${mockPressure} мм рт.ст.`;
-
-      // Расчет шансов (Щука любит падение, Карп любит стабильное высокое)
-      const pikeChance = isDropping ? Math.floor(75 + Math.random() * 20) : Math.floor(30 + Math.random() * 25);
-      const carpChance = isDropping ? Math.floor(15 + Math.random() * 25) : Math.floor(70 + Math.random() * 25);
-      const perchChance = Math.floor(50 + Math.random() * 30);
-
-      updateMetric('pike', pikeChance);
-      updateMetric('carp', carpChance);
-      updateMetric('perch', perchChance);
-
-      // Переключаем на таб прогноза
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      document.getElementById('view-forecast').classList.add('active');
-      document.getElementById('nav-forecast').classList.add('active');
-
-      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    // 5. Переход в карточку водоема (Днестр)
+    function openDetailView() {
+      document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('screen-detail').classList.add('active');
+      if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
     }
 
-    function updateMetric(fishKey, val) {
-      const fill = document.getElementById(`bar-${fishKey}`);
-      const txt = document.getElementById(`val-${fishKey}`);
-      fill.style.width = `${val}%`;
-      txt.innerText = `${val}%`;
-
-      if (val >= 70) {
-        fill.style.background = 'var(--success)';
-        txt.style.color = 'var(--success)';
-      } else if (val >= 40) {
-        fill.style.background = 'var(--warning)';
-        txt.style.color = 'var(--warning)';
-      } else {
-        fill.style.background = 'var(--danger)';
-        txt.style.color = 'var(--danger)';
-      }
-    }
-
-    // Донаты Telegram Stars
-    function tipStars(author, count) {
-      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
-      if (tg?.showPopup) {
-        tg.showPopup({
-          title: `Наградить ⭐ ${count} Stars?`,
-          message: `Вы хотите перевести ${count} звезд автору ${author} за лучший отчет об улове?`,
-          buttons: [
-            { id: 'ok', type: 'default', text: 'Оплатить Stars' },
-            { type: 'cancel', text: 'Отмена' }
-          ]
-        }, (btnId) => {
-          if (btnId === 'ok') {
-            tg.showAlert(`Успешно! Вы перевели ${count} ⭐ автору ${author}.`);
-          }
-        });
-      } else {
-        alert(`Тестовый перевод ${count} Stars автору ${author}!`);
-      }
-    }
-
-    function showDonateModal() {
+    // 6. Алерты для кнопок
+    function tgAlert(msg) {
       if (tg?.showAlert) {
-        tg.showAlert("Здесь подключается баланс Telegram Stars для покупки PRO-статуса и продвижения отчетов!");
+        tg.showAlert(msg);
+      } else {
+        alert(msg);
+      }
+    }
+
+    function addCatchAlert() {
+      if (tg?.showAlert) {
+        tg.showAlert("📸 Здесь откроется загрузка фото трофея, веса и приманки!");
+      } else {
+        alert("Загрузка фото улова");
       }
     }
   </script>
